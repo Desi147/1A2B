@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>1A2B 猜數字遊戲</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .game-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+            padding: 24px 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        /* 預設雙行/彈性佈局，避免小螢幕擠壓 */
+        .input-group {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 0; /* 防止 input 擠爆父容器 */
+            padding: 12px 10px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        input[type="text"]:focus {
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background-color: #667eea;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background-color: #5a6fd1;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-restart {
+            background-color: #ff4757;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .btn-restart:hover {
+            background-color: #e84118;
+        }
+
+        .message-box {
+            min-height: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 16px;
+            word-break: break-all;
+        }
+
+        .msg-error {
+            color: #ff4757;
+        }
+
+        .msg-info {
+            color: #2ed573;
+        }
+
+        .history-title {
+            margin-top: 20px;
+            font-size: 15px;
+            color: #666;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            text-align: left;
+        }
+
+        .history-list {
+            max-height: 180px;
+            overflow-y: auto;
+            margin-top: 10px;
+            list-style: none;
+            text-align: left;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-bottom: 1px dashed #eee;
+            font-size: 14px;
+        }
+
+        .history-item:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .badge {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        /* 手機極小螢幕優化：改為直立堆疊 */
+        @media (max-width: 360px) {
+            .input-group {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-card">
+    <h1>1A2B 數字猜謎</h1>
+
+    <div class="input-group">
+        <input type="text" id="userInput" placeholder="輸入4個不重複數字" maxlength="4" autocomplete="off" inputmode="numeric">
+        <button id="submitBtn">猜！</button>
+    </div>
+
+    <div id="message" class="message-box"></div>
+
+    <button id="restartBtn" class="btn-restart" style="display: none;">重新開始遊戲</button>
+
+    <div class="history-title">歷史紀錄</div>
+    <ul id="history" class="history-list"></ul>
+</div>
+
+<script>
+    // 遊戲狀態變數
+    let ans = [];
+    let errorLengthCount = 0; // 對應原本的 a
+    let errorRepeatCount = 0; // 對應原本的 b
+    let validGuessCount = 0;  // 對應原本的 c
+    let isGameOver = false;
+
+    // 取得 DOM 元素
+    const userInput = document.getElementById('userInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const messageEl = document.getElementById('message');
+    const historyEl = document.getElementById('history');
+
+    // 初始化/重新開始遊戲
+    function initGame() {
+        ans = [];
+        errorLengthCount = 0;
+        errorRepeatCount = 0;
+        validGuessCount = 0;
+        isGameOver = false;
+
+        // 隨機產生 4 個不重複數字 (0-9)
+        let pool = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        for (let i = 0; i < 4; i++) {
+            let randomIndex = Math.floor(Math.random() * pool.length);
+            ans.push(pool[randomIndex]);
+            pool.splice(randomIndex, 1);
+        }
+
+        // 重設介面
+        messageEl.textContent = "";
+        messageEl.className = "message-box";
+        historyEl.innerHTML = "";
+        userInput.value = "";
+        userInput.disabled = false;
+        submitBtn.disabled = false;
+        restartBtn.style.display = "none";
+        userInput.focus();
+    }
+
+    // 檢查猜測邏輯
+    function handleGuess() {
+        if (isGameOver) return;
+
+        const numStr = userInput.value.trim();
+        userInput.value = "";
+
+        // 1. 檢查長度是否為 4
+        if (numStr.length !== 4 || isNaN(numStr)) {
+            errorLengthCount++;
+            if (errorLengthCount <= 2) {
+                showMessage("請輸入4個數字", "msg-error");
+            } else {
+                showMessage("媽的智障不要故意", "msg-error");
+            }
+            return;
+        }
+
+        // 2. 檢查數字是否有重複
+        let hasDuplicate = false;
+        for (let i = 0; i < 4; i++) {
+            for (let j = i + 1; j < 4; j++) {
+                if (numStr[i] === numStr[j]) {
+                    hasDuplicate = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasDuplicate) {
+            errorRepeatCount++;
+            if (errorRepeatCount <= 2) {
+                showMessage("數字不準重複", "msg-error");
+            } else {
+                showMessage("幹你娘雞掰識字嗎", "msg-error");
+            }
+            return;
+        }
+
+        // 3. 輸入格式正確，計算 A 與 B
+        validGuessCount++;
+        let A = 0;
+        let B = 0;
+        let numArr = numStr.split("").map(Number);
+
+        for (let i = 0; i < 4; i++) {
+            if (numArr[i] === ans[i]) {
+                A++;
+            } else if (ans.includes(numArr[i])) {
+                B++;
+            }
+        }
+
+        // 判斷結果
+        if (A === 4) {
+            showMessage("🎉 答對了！", "msg-info");
+            addHistory(numStr, "4A0B");
+            gameWin();
+        } else {
+            let resultText = `${A}A${B}B`;
+            let extraMsg = "";
+            
+            // 每 5 次有效嘗試提示別氣餒
+            if (validGuessCount % 5 === 0) {
+                extraMsg = "別氣餒！ ";
+            }
+
+            showMessage(`${extraMsg}${resultText}`, "msg-info");
+            addHistory(numStr, resultText);
+        }
+    }
+
+    // 顯示訊息
+    function showMessage(msg, className) {
+        messageEl.textContent = msg;
+        messageEl.className = `message-box ${className}`;
+    }
+
+    // 新增歷史紀錄
+    function addHistory(guess, result) {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        li.innerHTML = `<span>第 ${validGuessCount} 次: ${guess}</span> <span class="badge">${result}</span>`;
+        historyEl.insertBefore(li, historyEl.firstChild);
+    }
+
+    // 遊戲勝利處理
+    function gameWin() {
+        isGameOver = true;
+        userInput.disabled = true;
+        submitBtn.disabled = true;
+        restartBtn.style.display = "block";
+    }
+
+    // 事件監聽
+    submitBtn.addEventListener('click', handleGuess);
+    
+    userInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            handleGuess();
+        }
+    });
+
+    restartBtn.addEventListener('click', initGame);
+
+    // 開局初始化
+    initGame();
+</script>
+
+</body>
+</html>
